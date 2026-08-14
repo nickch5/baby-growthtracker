@@ -474,14 +474,26 @@ document.getElementById('editProfileBtn').addEventListener('click', () => {
 sheetUrlInput.addEventListener('change', () => { state.sheetUrl = sheetUrlInput.value.trim(); saveState(state); });
 
 /* ================= Google Sheets sync ================= */
+function currentSheetUrl(){
+  const v = sheetUrlInput.value.trim();
+  if(v && v !== state.sheetUrl){
+    state.sheetUrl = v;
+    saveState(state);
+  }
+  return state.sheetUrl;
+}
+sheetUrlInput.addEventListener('input', currentSheetUrl);
+sheetUrlInput.addEventListener('change', currentSheetUrl);
+
 function postToSheet(record){
-  if(!state.sheetUrl) return Promise.resolve(false);
+  const url = currentSheetUrl();
+  if(!url) return Promise.resolve(false);
   const payload = {
     dob: state.dob, sex: state.sex,
     date: record.date, height: record.height ?? '', weight: record.weight ?? '',
     head: record.head ?? '', chest: record.chest ?? ''
   };
-  return fetch(state.sheetUrl, {
+  return fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
     body: JSON.stringify(payload)
@@ -492,7 +504,7 @@ function postToSheet(record){
 }
 
 document.getElementById('testSyncBtn').addEventListener('click', () => {
-  const url = sheetUrlInput.value.trim();
+  const url = currentSheetUrl();
   if(!url){ syncStatus.textContent = 'Paste a Web App URL first.'; syncStatus.className = 'status err'; return; }
   syncStatus.textContent = 'Testing…'; syncStatus.className = 'status';
   fetch(url).then(res => res.text()).then(() => {
