@@ -1,0 +1,756 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Growth Tracker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#F3F3F3;
+    --card:#FFFFFF;
+    --ink:#3A332C;
+    --ink-soft:#7A7167;
+    --sage:#8A9A7E;
+    --sage-deep:#5C6B52;
+    --clay:#E3A472;
+    --rose:#D98C93;
+    --gold:#B98B2E;
+    --line: rgba(58,51,44,0.16);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--paper);
+    color:var(--ink);
+    font-family:'Inter', sans-serif;
+    -webkit-font-smoothing:antialiased;
+    padding: 0 0 60px;
+  }
+  .wrap{ max-width: 780px; margin: 0 auto; padding: 40px 18px 0; }
+
+  .header{ text-align:center; padding: 8px 10px 36px; border-bottom: 1px dashed var(--line); margin-bottom: 28px; }
+  .eyebrow{ font-size: 12px; letter-spacing: 0.26em; color: var(--sage-deep); text-transform: uppercase; margin-bottom: 12px; }
+  h1{ font-family:'Fraunces', serif; font-weight: 500; font-style: italic; font-size: clamp(28px, 6vw, 42px); margin: 0 0 6px; }
+  .sub{ color: var(--ink-soft); font-size: 14px; }
+
+  .card{
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 20px;
+    margin-bottom: 20px;
+  }
+  .card h2{
+    font-family:'Fraunces', serif;
+    font-weight: 500;
+    font-size: 18px;
+    margin: 0 0 14px;
+  }
+  .card h2 .n{ color: var(--sage-deep); font-size: 13px; font-weight:400; font-family:'Inter',sans-serif; }
+
+  .row{ display:flex; gap: 14px; flex-wrap: wrap; }
+  .field{ flex: 1 1 140px; min-width: 120px; }
+  .field label{
+    display:block; font-size: 11px; letter-spacing:.06em; text-transform:uppercase;
+    color: var(--rose); margin-bottom: 5px;
+  }
+  input[type=date], input[type=number], input[type=text], select{
+    width: 100%;
+    font-family:'Inter', sans-serif;
+    font-size: 15px;
+    color: var(--ink);
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 9px 10px;
+    outline: none;
+  }
+  input:focus, select:focus{ border-color: var(--clay); }
+
+  .btn{
+    font-family:'Inter', sans-serif;
+    font-size: 14px;
+    border: none;
+    border-radius: 999px;
+    padding: 10px 20px;
+    cursor: pointer;
+    transition: opacity .2s ease;
+  }
+  .btn:hover{ opacity:.85; }
+  .btn-primary{ background: var(--sage-deep); color:#fff; }
+  .btn-ghost{ background: transparent; color: var(--sage-deep); border: 1.5px dashed var(--sage); }
+  .btn-row{ margin-top: 14px; display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+  .status{ font-size: 12.5px; color: var(--ink-soft); }
+  .status.ok{ color: var(--sage-deep); }
+  .status.err{ color: var(--rose); }
+
+  details.sync summary{
+    cursor:pointer; font-size: 13px; color: var(--sage-deep); list-style:none;
+    display:flex; align-items:center; gap:6px;
+  }
+  details.sync summary::-webkit-details-marker{ display:none; }
+  details.sync summary::before{ content:"⚙"; }
+  details.sync[open] summary::before{ content:"⚙"; }
+  details.sync .inner{ margin-top: 12px; }
+  .hint{ font-size: 12.5px; color: var(--ink-soft); line-height:1.6; margin-top:8px; }
+
+  table{ width:100%; border-collapse: collapse; font-size: 14px; }
+  th, td{ text-align:left; padding: 8px 6px; border-bottom: 1px solid var(--line); }
+  th{ font-size: 11px; letter-spacing:.05em; text-transform:uppercase; color: var(--ink-soft); font-weight:600; }
+  td.num{ font-variant-numeric: tabular-nums; }
+  .del-btn{
+    border:none; background:transparent; color: var(--ink-soft); cursor:pointer; font-size:14px;
+    width:26px; height:26px; border-radius:50%;
+  }
+  .del-btn:hover{ background: var(--rose); color:#fff; }
+  .empty{ color: var(--ink-soft); font-size: 14px; padding: 6px 0; }
+
+  .chart-wrap{ position:relative; height: 300px; }
+  .legend{ display:flex; gap:16px; flex-wrap:wrap; font-size:12.5px; color: var(--ink-soft); margin-top:10px; }
+  .legend span{ display:inline-flex; align-items:center; gap:6px; }
+  .swatch{ width:14px; height:3px; border-radius:2px; display:inline-block; }
+
+  #saveWarning{
+    position:fixed; left:50%; bottom:20px; transform:translateX(-50%);
+    background:#3A332C; color:#fff; padding:10px 18px; border-radius:8px;
+    font-family:'Inter',sans-serif; font-size:13px; z-index:999;
+    box-shadow:0 6px 20px rgba(0,0,0,.2); max-width:82vw; text-align:center; display:none;
+  }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <div class="header">
+    <div class="eyebrow">Growth Tracker</div>
+    <h1>Growth over time</h1>
+    <div class="sub">Weight & height, plotted against WHO growth standards</div>
+  </div>
+
+  <!-- Baby profile -->
+  <div class="card">
+    <h2>Baby's profile</h2>
+
+    <div id="profileView" style="display:none;">
+      <div class="row" style="align-items:center;">
+        <div class="field" style="flex:1 1 auto;">
+          <label>Set once for this baby</label>
+          <div id="profileSummary" style="font-family:'Fraunces',serif; font-size:16px;"></div>
+        </div>
+        <div style="align-self:flex-end;">
+          <button class="btn btn-ghost" id="editProfileBtn" type="button">Edit</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="profileEdit">
+      <div class="row">
+        <div class="field">
+          <label>Date of birth</label>
+          <input type="date" id="dob">
+        </div>
+        <div class="field">
+          <label>Sex</label>
+          <select id="sex">
+            <option value="boy">Boy</option>
+            <option value="girl">Girl</option>
+          </select>
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-primary" id="saveProfileBtn" type="button">Save profile</button>
+      </div>
+    </div>
+
+    <details class="sync">
+      <summary>Sync to Google Sheets</summary>
+      <div class="inner">
+        <div class="field">
+          <label>Web App URL</label>
+          <input type="text" id="sheetUrl" placeholder="https://script.google.com/macros/s/AKfycb.../exec">
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-ghost" id="testSyncBtn" type="button">Test connection</button>
+          <span class="status" id="syncStatus"></span>
+        </div>
+        <p class="hint">Paste the Web App URL from your deployed Google Apps Script here. Every saved measurement will also be sent to your Google Sheet automatically.</p>
+      </div>
+    </details>
+  </div>
+
+  <!-- Add measurement -->
+  <div class="card">
+    <h2>Add a measurement</h2>
+    <div class="row">
+      <div class="field">
+        <label>Date measured</label>
+        <input type="date" id="mDate">
+      </div>
+      <div class="field">
+        <label>Height (cm)</label>
+        <input type="number" id="mHeight" step="0.1" placeholder="e.g. 62.5">
+      </div>
+      <div class="field">
+        <label>Weight (kg)</label>
+        <input type="number" id="mWeight" step="0.01" placeholder="e.g. 5.80">
+      </div>
+      <div class="field">
+        <label>Head circumference (cm)</label>
+        <input type="number" id="mHead" step="0.1" placeholder="optional">
+      </div>
+      <div class="field">
+        <label>Chest circumference (cm)</label>
+        <input type="number" id="mChest" step="0.1" placeholder="optional">
+      </div>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-primary" id="saveRecordBtn" type="button">Save measurement</button>
+      <span class="status" id="saveStatus"></span>
+    </div>
+  </div>
+
+  <!-- Records table -->
+  <div class="card">
+    <h2>Records <span class="n" id="recordCount"></span></h2>
+    <div id="tableWrap">
+      <p class="empty" id="emptyMsg">No measurements yet — add one above.</p>
+      <table id="recordsTable" style="display:none;">
+        <thead>
+          <tr><th>Date</th><th>Age</th><th>Height</th><th>Weight</th><th>Head</th><th>Chest</th><th></th></tr>
+        </thead>
+        <tbody id="recordsBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Weight chart -->
+  <div class="card">
+    <h2>Weight-for-age</h2>
+    <div class="chart-wrap"><canvas id="weightChart"></canvas></div>
+    <div class="legend">
+      <span><i class="swatch" style="border-top:1.5px dashed #9aa892; height:0; background:none;"></i> P3–P97 (WHO)</span>
+      <span><i class="swatch" style="background:#3F7D4F"></i> Minton</span>
+    </div>
+  </div>
+
+  <!-- Height chart -->
+  <div class="card">
+    <h2>Height-for-age</h2>
+    <div class="chart-wrap"><canvas id="heightChart"></canvas></div>
+    <div class="legend">
+      <span><i class="swatch" style="border-top:1.5px dashed #9aa892; height:0; background:none;"></i> P3–P97 (WHO)</span>
+      <span><i class="swatch" style="background:#3F7D4F"></i> Minton</span>
+    </div>
+  </div>
+</div>
+
+<script>
+/* =========================================================
+   WHO Child Growth Standards — LMS parameters, 0–24 months
+   Source: WHO Child Growth Standards (cdn.who.int)
+   ========================================================= */
+const WHO = {
+  boy: {
+    weight: [
+      [0.3487,3.3464,0.14602],[0.2297,4.4709,0.13395],[0.1970,5.5675,0.12385],
+      [0.1738,6.3762,0.11727],[0.1553,7.0023,0.11316],[0.1395,7.5105,0.11080],
+      [0.1257,7.9340,0.10958],[0.1134,8.2970,0.10902],[0.1021,8.6151,0.10882],
+      [0.0917,8.9014,0.10881],[0.0820,9.1649,0.10891],[0.0730,9.4122,0.10906],
+      [0.0644,9.6479,0.10925],[0.0563,9.8749,0.10949],[0.0487,10.0953,0.10976],
+      [0.0413,10.3108,0.11007],[0.0343,10.5228,0.11041],[0.0275,10.7319,0.11079],
+      [0.0211,10.9385,0.11119],[0.0148,11.1430,0.11164],[0.0087,11.3462,0.11211],
+      [0.0029,11.5486,0.11261],[-0.0028,11.7504,0.11314],[-0.0083,11.9514,0.11369],
+      [-0.0137,12.1515,0.11426],[-0.0189,12.3502,0.11485],[-0.0240,12.5466,0.11544],
+      [-0.0289,12.7401,0.11604],[-0.0337,12.9303,0.11664],[-0.0385,13.1169,0.11723],
+      [-0.0431,13.3000,0.11781],[-0.0476,13.4798,0.11839],[-0.0520,13.6567,0.11896],
+      [-0.0564,13.8309,0.11953],[-0.0606,14.0031,0.12008],[-0.0648,14.1736,0.12062],
+      [-0.0689,14.3429,0.12116],[-0.0729,14.5113,0.12168],[-0.0769,14.6791,0.12220],
+      [-0.0808,14.8466,0.12271],[-0.0846,15.0140,0.12322],[-0.0883,15.1813,0.12373],
+      [-0.0920,15.3486,0.12425],[-0.0957,15.5158,0.12478],[-0.0993,15.6828,0.12531],
+      [-0.1028,15.8497,0.12586],[-0.1063,16.0163,0.12643],[-0.1097,16.1827,0.12700],
+      [-0.1131,16.3489,0.12759],[-0.1165,16.5150,0.12819],[-0.1198,16.6811,0.12880],
+      [-0.1230,16.8471,0.12943],[-0.1262,17.0132,0.13005],[-0.1294,17.1792,0.13069],
+      [-0.1325,17.3452,0.13133],[-0.1356,17.5111,0.13197],[-0.1387,17.6768,0.13261],
+      [-0.1417,17.8422,0.13325],[-0.1447,18.0073,0.13389],[-0.1477,18.1722,0.13453],
+      [-0.1506,18.3366,0.13517]
+    ],
+    height: [
+      [1,49.8842,0.03795],[1,54.7244,0.03557],[1,58.4249,0.03424],
+      [1,61.4292,0.03328],[1,63.8860,0.03257],[1,65.9026,0.03204],
+      [1,67.6236,0.03165],[1,69.1645,0.03139],[1,70.5994,0.03124],
+      [1,71.9687,0.03117],[1,73.2812,0.03118],[1,74.5388,0.03125],
+      [1,75.7488,0.03137],[1,76.9186,0.03154],[1,78.0497,0.03174],
+      [1,79.1458,0.03197],[1,80.2113,0.03222],[1,81.2487,0.03250],
+      [1,82.2587,0.03279],[1,83.2418,0.03310],[1,84.1996,0.03342],
+      [1,85.1348,0.03376],[1,86.0477,0.03410],[1,86.9410,0.03445],
+      [1,87.1161,0.03507],[1,87.9720,0.03542],[1,88.8065,0.03576],
+      [1,89.6197,0.03610],[1,90.4120,0.03642],[1,91.1828,0.03674],
+      [1,91.9327,0.03704],[1,92.6631,0.03733],[1,93.3753,0.03761],
+      [1,94.0711,0.03787],[1,94.7532,0.03812],[1,95.4236,0.03836],
+      [1,96.0835,0.03858],[1,96.7337,0.03879],[1,97.3749,0.03900],
+      [1,98.0073,0.03919],[1,98.6310,0.03937],[1,99.2459,0.03954],
+      [1,99.8515,0.03971],[1,100.4485,0.03986],[1,101.0374,0.04002],
+      [1,101.6186,0.04016],[1,102.1933,0.04031],[1,102.7625,0.04045],
+      [1,103.3273,0.04059],[1,103.8886,0.04073],[1,104.4473,0.04086],
+      [1,105.0041,0.04100],[1,105.5596,0.04113],[1,106.1138,0.04126],
+      [1,106.6668,0.04139],[1,107.2188,0.04152],[1,107.7697,0.04165],
+      [1,108.3198,0.04177],[1,108.8689,0.04190],[1,109.4170,0.04202],
+      [1,109.9638,0.04214]
+    ]
+  },
+  girl: {
+    weight: [
+      [0.3809,3.2322,0.14171],[0.1714,4.1873,0.13724],[0.0962,5.1282,0.13000],
+      [0.0402,5.8458,0.12619],[-0.0050,6.4237,0.12402],[-0.0430,6.8985,0.12274],
+      [-0.0756,7.2970,0.12204],[-0.1039,7.6422,0.12178],[-0.1288,7.9487,0.12181],
+      [-0.1507,8.2254,0.12199],[-0.1700,8.4800,0.12223],[-0.1872,8.7192,0.12247],
+      [-0.2024,8.9481,0.12268],[-0.2158,9.1699,0.12283],[-0.2278,9.3870,0.12294],
+      [-0.2384,9.6008,0.12299],[-0.2478,9.8124,0.12303],[-0.2562,10.0226,0.12306],
+      [-0.2637,10.2315,0.12309],[-0.2703,10.4393,0.12315],[-0.2762,10.6464,0.12323],
+      [-0.2815,10.8534,0.12335],[-0.2862,11.0608,0.12350],[-0.2903,11.2688,0.12369],
+      [-0.2941,11.4775,0.12390],[-0.2975,11.6864,0.12414],[-0.3005,11.8947,0.12441],
+      [-0.3032,12.1015,0.12472],[-0.3057,12.3059,0.12506],[-0.3080,12.5073,0.12545],
+      [-0.3101,12.7055,0.12587],[-0.3120,12.9006,0.12633],[-0.3138,13.0930,0.12683],
+      [-0.3155,13.2837,0.12737],[-0.3171,13.4731,0.12794],[-0.3186,13.6618,0.12855],
+      [-0.3201,13.8503,0.12919],[-0.3216,14.0385,0.12988],[-0.3230,14.2265,0.13059],
+      [-0.3243,14.4140,0.13135],[-0.3257,14.6010,0.13213],[-0.3270,14.7873,0.13293],
+      [-0.3283,14.9727,0.13376],[-0.3296,15.1573,0.13460],[-0.3309,15.3410,0.13545],
+      [-0.3322,15.5240,0.13630],[-0.3335,15.7064,0.13716],[-0.3348,15.8882,0.13800],
+      [-0.3361,16.0697,0.13884],[-0.3374,16.2511,0.13968],[-0.3387,16.4322,0.14051],
+      [-0.3400,16.6133,0.14132],[-0.3414,16.7942,0.14213],[-0.3427,16.9748,0.14293],
+      [-0.3440,17.1551,0.14371],[-0.3453,17.3347,0.14448],[-0.3466,17.5136,0.14525],
+      [-0.3479,17.6916,0.14600],[-0.3492,17.8686,0.14675],[-0.3505,18.0445,0.14748],
+      [-0.3518,18.2193,0.14821]
+    ],
+    height: [
+      [1,49.1477,0.03790],[1,53.6872,0.03640],[1,57.0673,0.03568],
+      [1,59.8029,0.03520],[1,62.0899,0.03486],[1,64.0301,0.03463],
+      [1,65.7311,0.03448],[1,67.2873,0.03441],[1,68.7498,0.03440],
+      [1,70.1435,0.03444],[1,71.4818,0.03452],[1,72.7710,0.03464],
+      [1,74.0150,0.03479],[1,75.2176,0.03496],[1,76.3817,0.03514],
+      [1,77.5099,0.03534],[1,78.6055,0.03555],[1,79.6710,0.03576],
+      [1,80.7079,0.03598],[1,81.7182,0.03620],[1,82.7036,0.03643],
+      [1,83.6654,0.03666],[1,84.6040,0.03688],[1,85.5202,0.03711],
+      [1,85.7153,0.03764],[1,86.5904,0.03786],[1,87.4462,0.03808],
+      [1,88.2830,0.03830],[1,89.1004,0.03851],[1,89.8991,0.03872],
+      [1,90.6797,0.03893],[1,91.4430,0.03913],[1,92.1906,0.03933],
+      [1,92.9239,0.03952],[1,93.6444,0.03971],[1,94.3533,0.03989],
+      [1,95.0515,0.04006],[1,95.7399,0.04024],[1,96.4187,0.04041],
+      [1,97.0885,0.04057],[1,97.7493,0.04073],[1,98.4015,0.04089],
+      [1,99.0448,0.04105],[1,99.6795,0.04120],[1,100.3058,0.04135],
+      [1,100.9238,0.04150],[1,101.5337,0.04164],[1,102.1360,0.04179],
+      [1,102.7312,0.04193],[1,103.3197,0.04206],[1,103.9021,0.04220],
+      [1,104.4786,0.04233],[1,105.0494,0.04246],[1,105.6148,0.04259],
+      [1,106.1748,0.04272],[1,106.7295,0.04285],[1,107.2788,0.04298],
+      [1,107.8227,0.04310],[1,108.3613,0.04322],[1,108.8948,0.04334],
+      [1,109.4233,0.04347]
+    ]
+  }
+};
+
+// Z-scores for the standard percentile lines
+const Z = { p3:-1.8808, p10:-1.2816, p25:-0.6745, p50:0, p75:0.6745, p90:1.2816, p97:1.8808 };
+const PERCENTILE_KEYS = ['p3','p10','p25','p50','p75','p90','p97'];
+const WHO_MAX_MONTH = 60; // WHO 0-5yr data limit
+
+function lmsValue(L, M, S, z){
+  if(Math.abs(L) < 1e-6) return M * Math.exp(S * z);
+  return M * Math.pow(1 + L * S * z, 1 / L);
+}
+
+function referenceCurve(sex, metric, zscore, maxMonth){
+  return WHO[sex][metric]
+    .slice(0, maxMonth + 1)
+    .map((row, month) => ({ x: month, y: +lmsValue(row[0], row[1], row[2], zscore).toFixed(2) }));
+}
+
+/* ================= persistence ================= */
+const STORAGE_KEY = 'growthTrackerData';
+
+function loadState(){
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? JSON.parse(raw) : { dob:'', sex:'boy', sheetUrl:'', records: [] };
+  }catch(err){
+    console.warn('Could not load growth data:', err);
+    return { dob:'', sex:'boy', sheetUrl:'', records: [] };
+  }
+}
+function saveState(state){
+  try{
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  }catch(err){
+    console.warn('Could not save growth data:', err);
+    showWarning('Could not save — local storage may be full or blocked.');
+  }
+}
+
+let state = loadState();
+
+function showWarning(msg){
+  let el = document.getElementById('saveWarning');
+  if(!el){
+    el = document.createElement('div');
+    el.id = 'saveWarning';
+    document.body.appendChild(el);
+  }
+  el.textContent = msg;
+  el.style.display = 'block';
+  clearTimeout(el._t);
+  el._t = setTimeout(() => { el.style.display = 'none'; }, 4500);
+}
+
+/* ================= age helper ================= */
+function ageInMonths(dobStr, dateStr){
+  if(!dobStr || !dateStr) return null;
+  const dob = new Date(dobStr);
+  const d = new Date(dateStr);
+  if(isNaN(dob) || isNaN(d)) return null;
+  const days = (d - dob) / 86400000;
+  return days / 30.4368499;
+}
+function formatAge(months){
+  if(months === null) return '—';
+  if(months < 0) return 'before birth';
+  const m = Math.floor(months);
+  const days = Math.round((months - m) * 30.4368499);
+  if(m === 0) return days + 'd';
+  return m + 'm ' + days + 'd';
+}
+
+/* ================= DOM refs ================= */
+const dobInput = document.getElementById('dob');
+const sexSelect = document.getElementById('sex');
+const sheetUrlInput = document.getElementById('sheetUrl');
+const syncStatus = document.getElementById('syncStatus');
+const saveStatus = document.getElementById('saveStatus');
+const recordsBody = document.getElementById('recordsBody');
+const recordsTable = document.getElementById('recordsTable');
+const emptyMsg = document.getElementById('emptyMsg');
+const recordCount = document.getElementById('recordCount');
+const profileView = document.getElementById('profileView');
+const profileEdit = document.getElementById('profileEdit');
+const profileSummary = document.getElementById('profileSummary');
+
+dobInput.value = state.dob || '';
+sexSelect.value = state.sex || 'boy';
+sheetUrlInput.value = state.sheetUrl || '';
+document.getElementById('mDate').value = new Date().toISOString().slice(0,10);
+
+function formatDateNice(dateStr){
+  const d = new Date(dateStr);
+  if(isNaN(d)) return dateStr;
+  return d.toLocaleDateString('en-US', { year:'numeric', month:'long', day:'numeric' });
+}
+
+function renderProfile(){
+  if(state.dob){
+    profileSummary.textContent = `Born ${formatDateNice(state.dob)} · ${state.sex === 'girl' ? 'Girl' : 'Boy'}`;
+    profileView.style.display = 'block';
+    profileEdit.style.display = 'none';
+  } else {
+    profileView.style.display = 'none';
+    profileEdit.style.display = 'block';
+  }
+}
+
+document.getElementById('saveProfileBtn').addEventListener('click', () => {
+  if(!dobInput.value){ return; }
+  state.dob = dobInput.value;
+  state.sex = sexSelect.value;
+  saveState(state);
+  renderProfile();
+  renderAll();
+});
+
+document.getElementById('editProfileBtn').addEventListener('click', () => {
+  profileView.style.display = 'none';
+  profileEdit.style.display = 'block';
+});
+
+sheetUrlInput.addEventListener('change', () => { state.sheetUrl = sheetUrlInput.value.trim(); saveState(state); });
+
+/* ================= Google Sheets sync ================= */
+function postToSheet(record){
+  if(!state.sheetUrl) return Promise.resolve(false);
+  const payload = {
+    dob: state.dob, sex: state.sex,
+    date: record.date, height: record.height ?? '', weight: record.weight ?? '',
+    head: record.head ?? '', chest: record.chest ?? ''
+  };
+  return fetch(state.sheetUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify(payload)
+  }).then(res => true).catch(err => {
+    console.warn('Sheet sync failed:', err);
+    return false;
+  });
+}
+
+document.getElementById('testSyncBtn').addEventListener('click', () => {
+  const url = sheetUrlInput.value.trim();
+  if(!url){ syncStatus.textContent = 'Paste a Web App URL first.'; syncStatus.className = 'status err'; return; }
+  syncStatus.textContent = 'Testing…'; syncStatus.className = 'status';
+  fetch(url).then(res => res.text()).then(() => {
+    syncStatus.textContent = 'Connected ✓'; syncStatus.className = 'status ok';
+  }).catch(err => {
+    console.warn(err);
+    syncStatus.textContent = 'Could not connect — check the URL and deployment settings.';
+    syncStatus.className = 'status err';
+  });
+});
+
+/* ================= add / delete records ================= */
+document.getElementById('saveRecordBtn').addEventListener('click', () => {
+  const date = document.getElementById('mDate').value;
+  if(!date){ saveStatus.textContent = 'Please pick a date.'; saveStatus.className = 'status err'; return; }
+  const record = {
+    date,
+    height: parseFloat(document.getElementById('mHeight').value) || null,
+    weight: parseFloat(document.getElementById('mWeight').value) || null,
+    head: parseFloat(document.getElementById('mHead').value) || null,
+    chest: parseFloat(document.getElementById('mChest').value) || null
+  };
+  if(record.height === null && record.weight === null && record.head === null && record.chest === null){
+    saveStatus.textContent = 'Enter at least one measurement.'; saveStatus.className = 'status err'; return;
+  }
+  state.records.push(record);
+  state.records.sort((a,b) => new Date(a.date) - new Date(b.date));
+  saveState(state);
+
+  ['mHeight','mWeight','mHead','mChest'].forEach(id => document.getElementById(id).value = '');
+  saveStatus.textContent = 'Saved.'; saveStatus.className = 'status ok';
+
+  postToSheet(record).then(ok => {
+    if(state.sheetUrl){
+      saveStatus.textContent = ok ? 'Saved & synced to Google Sheets.' : 'Saved locally — sheet sync failed.';
+      saveStatus.className = ok ? 'status ok' : 'status err';
+      if(!ok) showWarning('Saved locally, but could not reach Google Sheets. Check your Web App URL.');
+    }
+  });
+
+  renderAll();
+});
+
+function deleteRecord(idx){
+  state.records.splice(idx, 1);
+  saveState(state);
+  renderAll();
+}
+
+/* ================= rendering ================= */
+function renderTable(){
+  recordCount.textContent = state.records.length ? `(${state.records.length})` : '';
+  if(!state.records.length){
+    emptyMsg.style.display = 'block';
+    recordsTable.style.display = 'none';
+    return;
+  }
+  emptyMsg.style.display = 'none';
+  recordsTable.style.display = 'table';
+  recordsBody.innerHTML = state.records.map((r, i) => {
+    const age = formatAge(ageInMonths(state.dob, r.date));
+    return `<tr>
+      <td>${r.date}</td>
+      <td>${age}</td>
+      <td class="num">${r.height ?? '—'}${r.height ? ' cm' : ''}</td>
+      <td class="num">${r.weight ?? '—'}${r.weight ? ' kg' : ''}</td>
+      <td class="num">${r.head ?? '—'}${r.head ? ' cm' : ''}</td>
+      <td class="num">${r.chest ?? '—'}${r.chest ? ' cm' : ''}</td>
+      <td><button class="del-btn" data-idx="${i}" title="Delete">✕</button></td>
+    </tr>`;
+  }).join('');
+  recordsBody.querySelectorAll('.del-btn').forEach(btn => {
+    btn.addEventListener('click', () => deleteRecord(+btn.dataset.idx));
+  });
+}
+
+let weightChartData, heightChartData;
+
+function computeXMax(){
+  let maxAge = 24;
+  if(state.dob){
+    const todayStr = new Date().toISOString().slice(0,10);
+    const ageToday = ageInMonths(state.dob, todayStr);
+    if(ageToday !== null && !isNaN(ageToday)) maxAge = Math.max(maxAge, ageToday);
+  }
+  state.records.forEach(r => {
+    const a = ageInMonths(state.dob, r.date);
+    if(a !== null && !isNaN(a)) maxAge = Math.max(maxAge, a);
+  });
+  maxAge = Math.ceil((maxAge + 1) / 6) * 6; // headroom, rounded to a 6-month mark
+  return Math.min(WHO_MAX_MONTH, Math.max(24, maxAge));
+}
+
+function drawGrowthChart(canvas, wrap, curves, child, childColor, yUnit, xMax){
+  const dpr = window.devicePixelRatio || 1;
+  const cssW = wrap.clientWidth;
+  const cssH = wrap.clientHeight;
+  canvas.width = cssW * dpr;
+  canvas.height = cssH * dpr;
+  canvas.style.width = cssW + 'px';
+  canvas.style.height = cssH + 'px';
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, cssW, cssH);
+
+  const pad = { left: 42, right: 26, top: 10, bottom: 26 };
+  const plotW = cssW - pad.left - pad.right;
+  const plotH = cssH - pad.top - pad.bottom;
+
+  // y-range from p3/p97 plus any child points
+  let yMin = Math.min(...curves.p3.map(p => p.y));
+  let yMax = Math.max(...curves.p97.map(p => p.y));
+  child.forEach(p => { yMin = Math.min(yMin, p.y); yMax = Math.max(yMax, p.y); });
+  const yPad = (yMax - yMin) * 0.08 || 1;
+  yMin -= yPad; yMax += yPad;
+
+  const xToPx = x => pad.left + (x / xMax) * plotW;
+  const yToPx = y => pad.top + (1 - (y - yMin) / (yMax - yMin)) * plotH;
+
+  // gridlines + y labels
+  ctx.strokeStyle = 'rgba(58,51,44,0.08)';
+  ctx.fillStyle = '#7A7167';
+  ctx.font = '11px Inter, sans-serif';
+  ctx.textAlign = 'right';
+  ctx.textBaseline = 'middle';
+  const ySteps = 5;
+  for(let i = 0; i <= ySteps; i++){
+    const val = yMin + (yMax - yMin) * (i / ySteps);
+    const py = yToPx(val);
+    ctx.beginPath();
+    ctx.moveTo(pad.left, py);
+    ctx.lineTo(cssW - pad.right, py);
+    ctx.stroke();
+    ctx.fillText(val.toFixed(val < 10 ? 1 : 0), pad.left - 6, py);
+  }
+
+  // x gridlines + labels
+  const xStep = xMax > 24 ? 6 : 3;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  for(let m = 0; m <= xMax; m += xStep){
+    const px = xToPx(m);
+    ctx.beginPath();
+    ctx.moveTo(px, pad.top);
+    ctx.lineTo(px, cssH - pad.bottom);
+    ctx.stroke();
+    ctx.fillText(m, px, cssH - pad.bottom + 6);
+  }
+
+  // subtle shaded band between p3 and p97
+  ctx.beginPath();
+  curves.p97.forEach((p, i) => { const px = xToPx(p.x), py = yToPx(p.y); i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py); });
+  for(let i = curves.p3.length - 1; i >= 0; i--){ ctx.lineTo(xToPx(curves.p3[i].x), yToPx(curves.p3[i].y)); }
+  ctx.closePath();
+  ctx.fillStyle = 'rgba(138,154,126,0.08)';
+  ctx.fill();
+
+  // all percentile reference lines — light dashed
+  PERCENTILE_KEYS.forEach(key => {
+    const curve = curves[key];
+    ctx.beginPath();
+    curve.forEach((p, i) => { const px = xToPx(p.x), py = yToPx(p.y); i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py); });
+    if(key === 'p50'){
+      ctx.strokeStyle = 'rgba(138,154,126,0.7)';
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([5,3]);
+    } else {
+      ctx.strokeStyle = 'rgba(58,51,44,0.22)';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([3,3]);
+    }
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // small label at the right edge
+    const last = curve[curve.length - 1];
+    ctx.fillStyle = key === 'p50' ? 'rgba(92,107,82,0.85)' : 'rgba(58,51,44,0.45)';
+    ctx.font = '9px Inter, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(key.replace('p','P'), Math.min(xToPx(last.x) + 3, cssW - pad.right + 3), yToPx(last.y));
+  });
+
+  // child's data — solid black
+  if(child.length){
+    ctx.beginPath();
+    child.forEach((p, i) => { const px = xToPx(p.x), py = yToPx(p.y); i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py); });
+    ctx.strokeStyle = childColor;
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+
+    child.forEach(p => {
+      ctx.beginPath();
+      ctx.arc(xToPx(p.x), yToPx(p.y), 4, 0, Math.PI * 2);
+      ctx.fillStyle = childColor;
+      ctx.fill();
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+    });
+  }
+
+  // axis titles
+  ctx.fillStyle = '#7A7167';
+  ctx.font = '11px Inter, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'alphabetic';
+  ctx.fillText('Age (months)', pad.left + plotW / 2, cssH - 4);
+
+  ctx.save();
+  ctx.translate(12, pad.top + plotH / 2);
+  ctx.rotate(-Math.PI / 2);
+  ctx.fillText(yUnit, 0, 0);
+  ctx.restore();
+}
+
+function buildSeries(metric, xMax){
+  const sex = state.sex === 'girl' ? 'girl' : 'boy';
+  const curves = {};
+  PERCENTILE_KEYS.forEach(key => { curves[key] = referenceCurve(sex, metric, Z[key], xMax); });
+  const child = state.records
+    .filter(r => r[metric] !== null && r[metric] !== undefined && state.dob)
+    .map(r => ({ x: +ageInMonths(state.dob, r.date).toFixed(2), y: r[metric] }))
+    .filter(p => p.x !== null && !isNaN(p.x) && p.x >= 0)
+    .sort((a, b) => a.x - b.x);
+  return { curves, child };
+}
+
+function renderCharts(){
+  const xMax = computeXMax();
+
+  const w = buildSeries('weight', xMax);
+  weightChartData = w;
+  const wCanvas = document.getElementById('weightChart');
+  const wWrap = wCanvas.parentElement;
+  drawGrowthChart(wCanvas, wWrap, w.curves, w.child, '#3F7D4F', 'Weight (kg)', xMax);
+
+  const h = buildSeries('height', xMax);
+  heightChartData = h;
+  const hCanvas = document.getElementById('heightChart');
+  const hWrap = hCanvas.parentElement;
+  drawGrowthChart(hCanvas, hWrap, h.curves, h.child, '#3F7D4F', 'Height (cm)', xMax);
+}
+
+let resizeTimer;
+window.addEventListener('resize', () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(renderCharts, 150);
+});
+
+function renderAll(){
+  renderProfile();
+  renderTable();
+  renderCharts();
+}
+
+renderAll();
+</script>
+
+</body>
+</html>
