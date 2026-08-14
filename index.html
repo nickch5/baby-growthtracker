@@ -174,9 +174,10 @@
         </div>
         <div class="btn-row">
           <button class="btn btn-ghost" id="testSyncBtn" type="button">Test connection</button>
+          <button class="btn btn-ghost" id="pullSyncBtn" type="button">Refresh from Sheet</button>
           <span class="status" id="syncStatus"></span>
         </div>
-        <p class="hint">Paste the Web App URL from your deployed Google Apps Script here. Every saved measurement will also be sent to your Google Sheet automatically.</p>
+        <p class="hint">Paste the Web App URL from your deployed Google Apps Script here. Every saved measurement is also sent to your Google Sheet, and connecting (or tapping "Refresh from Sheet") pulls records back down — so other devices using the same URL will see them too.</p>
       </div>
     </details>
   </div>
@@ -503,18 +504,72 @@ function postToSheet(record){
   });
 }
 
-document.getElementById('testSyncBtn').addEventListener('click', () => {
+function pullFromSheet(){
   const url = currentSheetUrl();
-  if(!url){ syncStatus.textContent = 'Paste a Web App URL first.'; syncStatus.className = 'status err'; return; }
-  syncStatus.textContent = 'Testing…'; syncStatus.className = 'status';
-  fetch(url).then(res => res.text()).then(() => {
-    syncStatus.textContent = 'Connected ✓'; syncStatus.className = 'status ok';
-  }).catch(err => {
-    console.warn(err);
-    syncStatus.textContent = 'Could not connect — check the URL and deployment settings.';
-    syncStatus.className = 'status err';
+  if(!url) return Promise.resolve(null);
+  return fetch(url).then(res => res.json()).catch(err => {
+    console.warn('Sheet pull failed:', err);
+    return null;
   });
-});
+}
+
+// remote rows look like: [{ 'Recorded At', DOB, Sex, 'Date Measured',
+//   'Height (cm)', 'Weight (kg)', 'Head Circumference (cm)', 'Chest Circumference (cm)' }, ...]
+function mergeRemoteRows(rows){
+  if(!Array.isArray(rows) || !rows.length) return false;
+
+  if(!state.dob && rows[0]['DOB']) state.dob = rows[0]['DOB'];
+  if(rows[0]['Sex']) state.sex = (rows[0]['Sex'] === 'girl') ? 'girl' : 'boy';
+
+  const byDate = {};
+  state.records.forEach(r => { byDate[r.date] = r; });
+
+  rows.forEach(row => {
+    const date = row['Date Measured'];
+    if(!date) return;
+    const num = v => (v === '' || v === undefined || v === null) ? null : parseFloat(v);
+    byDate[date] = {
+      date,
+      height: num(row['Height (cm)']),
+      weight: num(row['Weight (kg)']),
+      head: num(row['Head Circumference (cm)']),
+      chest: num(row['Chest Circumference (cm)'])
+    };
+  });
+
+  state.records = Object.values(byDate).sort((a,b) => new Date(a.date) - new Date(b.date));
+  saveState(state);
+  dobInput.value = state.dob || '';
+  sexSelect.value = state.sex || 'boy';
+  return true;
+}
+
+function syncPull(showStatus){
+  const url = currentSheetUrl();
+  if(!url){
+    if(showStatus){ syncStatus.textContent = 'Paste a Web App URL first.'; syncStatus.className = 'status err'; }
+    return Promise.resolve();
+  }
+  if(showStatus){ syncStatus.textContent = 'Syncing…'; syncStatus.className = 'status'; }
+  return pullFromSheet().then(rows => {
+    if(rows){
+      mergeRemoteRows(rows);
+      renderAll();
+      if(showStatus){ syncStatus.textContent = 'Connected ✓ — records refreshed.'; syncStatus.className = 'status ok'; }
+    } else if(showStatus){
+      syncStatus.textContent = 'Could not connect — check the URL and deployment settings.';
+      syncStatus.className = 'status err';
+    }
+  });
+}
+
+document.getElementById('testSyncBtn').addEventListener('click', () => syncPull(true));
+document.getElementById('pullSyncBtn').addEventListener('click', () => syncPull(true));
+
+// if a URL was already saved from a previous session, pull on load automatically
+if(state.sheetUrl){
+  syncPull(false);
+}
 
 /* ================= add / delete records ================= */
 document.getElementById('saveRecordBtn').addEventListener('click', () => {
