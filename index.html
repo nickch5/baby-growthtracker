@@ -504,13 +504,33 @@ function postToSheet(record){
   });
 }
 
+let lastSyncError = '';
+
 function pullFromSheet(){
   const url = currentSheetUrl();
   if(!url) return Promise.resolve(null);
-  return fetch(url).then(res => res.json()).catch(err => {
-    console.warn('Sheet pull failed:', err);
-    return null;
-  });
+  return fetch(url)
+    .then(res => {
+      if(!res.ok){
+        lastSyncError = 'HTTP ' + res.status + ' ' + res.statusText;
+        throw new Error(lastSyncError);
+      }
+      return res.text();
+    })
+    .then(text => {
+      try{
+        return JSON.parse(text);
+      }catch(parseErr){
+        lastSyncError = 'Response was not valid JSON: ' + text.slice(0, 120);
+        console.warn(lastSyncError);
+        return null;
+      }
+    })
+    .catch(err => {
+      lastSyncError = err && err.message ? err.message : String(err);
+      console.warn('Sheet pull failed:', err);
+      return null;
+    });
 }
 
 // remote rows look like: [{ 'Recorded At', DOB, Sex, 'Date Measured',
@@ -557,7 +577,7 @@ function syncPull(showStatus){
       renderAll();
       if(showStatus){ syncStatus.textContent = 'Connected ✓ — records refreshed.'; syncStatus.className = 'status ok'; }
     } else if(showStatus){
-      syncStatus.textContent = 'Could not connect — check the URL and deployment settings.';
+      syncStatus.textContent = 'Error: ' + (lastSyncError || 'could not connect — check the URL and deployment settings.');
       syncStatus.className = 'status err';
     }
   });
