@@ -177,6 +177,10 @@
           <button class="btn btn-ghost" id="pullSyncBtn" type="button">Refresh from Sheet</button>
           <span class="status" id="syncStatus"></span>
         </div>
+        <div class="btn-row">
+          <button class="btn btn-ghost" id="debugUrlBtn" type="button">Show exact URL being used</button>
+        </div>
+        <p class="hint" id="debugUrlOutput" style="word-break:break-all; font-family:monospace; background:#f7f4ee; padding:8px; border-radius:6px; display:none;"></p>
         <p class="hint">Paste the Web App URL from your deployed Google Apps Script here. Every saved measurement is also sent to your Google Sheet, and connecting (or tapping "Refresh from Sheet") pulls records back down — so other devices using the same URL will see them too.</p>
       </div>
     </details>
@@ -584,6 +588,20 @@ function syncPull(showStatus){
 }
 
 document.getElementById('testSyncBtn').addEventListener('click', () => syncPull(true));
+
+document.getElementById('debugUrlBtn').addEventListener('click', () => {
+  const out = document.getElementById('debugUrlOutput');
+  const raw = sheetUrlInput.value;
+  const trimmed = raw.trim();
+  const looksValid = /^https:\/\/script\.google\.com\/macros\/s\/[A-Za-z0-9_-]+\/exec$/.test(trimmed);
+  out.style.display = 'block';
+  out.innerHTML =
+    'Raw length: ' + raw.length + ' chars<br>' +
+    'Trimmed length: ' + trimmed.length + ' chars<br>' +
+    'Has leading/trailing whitespace: ' + (raw !== trimmed) + '<br>' +
+    'Matches expected pattern: ' + looksValid + '<br>' +
+    'URL: [' + trimmed + ']';
+});
 document.getElementById('pullSyncBtn').addEventListener('click', () => syncPull(true));
 
 // if a URL was already saved from a previous session, pull on load automatically
