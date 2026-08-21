@@ -126,8 +126,7 @@
 <div class="wrap">
   <div class="header">
     <div class="eyebrow">Growth Tracker</div>
-    <h1>Growth over time</h1>
-    <div class="sub">Weight & height, plotted against WHO growth standards</div>
+    <h1>Minton's Growth</h1>
   </div>
 
   <!-- Baby profile -->
@@ -186,6 +185,26 @@
     </details>
   </div>
 
+  <!-- Weight chart -->
+  <div class="card">
+    <h2>Weight</h2>
+    <div class="chart-wrap"><canvas id="weightChart"></canvas></div>
+    <div class="legend">
+      <span><i class="swatch" style="border-top:1.5px dashed #9aa892; height:0; background:none;"></i> P3–P97 (WHO)</span>
+      <span><i class="swatch" style="background:#3F7D4F"></i> Minton</span>
+    </div>
+  </div>
+
+  <!-- Height chart -->
+  <div class="card">
+    <h2>Height</h2>
+    <div class="chart-wrap"><canvas id="heightChart"></canvas></div>
+    <div class="legend">
+      <span><i class="swatch" style="border-top:1.5px dashed #9aa892; height:0; background:none;"></i> P3–P97 (WHO)</span>
+      <span><i class="swatch" style="background:#3F7D4F"></i> Minton</span>
+    </div>
+  </div>
+
   <!-- Add measurement -->
   <div class="card">
     <h2>Add a measurement</h2>
@@ -228,26 +247,6 @@
         </thead>
         <tbody id="recordsBody"></tbody>
       </table>
-    </div>
-  </div>
-
-  <!-- Weight chart -->
-  <div class="card">
-    <h2>Weight-for-age</h2>
-    <div class="chart-wrap"><canvas id="weightChart"></canvas></div>
-    <div class="legend">
-      <span><i class="swatch" style="border-top:1.5px dashed #9aa892; height:0; background:none;"></i> P3–P97 (WHO)</span>
-      <span><i class="swatch" style="background:#3F7D4F"></i> Minton</span>
-    </div>
-  </div>
-
-  <!-- Height chart -->
-  <div class="card">
-    <h2>Height-for-age</h2>
-    <div class="chart-wrap"><canvas id="heightChart"></canvas></div>
-    <div class="legend">
-      <span><i class="swatch" style="border-top:1.5px dashed #9aa892; height:0; background:none;"></i> P3–P97 (WHO)</span>
-      <span><i class="swatch" style="background:#3F7D4F"></i> Minton</span>
     </div>
   </div>
 </div>
