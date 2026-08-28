@@ -374,13 +374,23 @@ function referenceCurve(sex, metric, zscore, maxMonth){
 /* ================= persistence ================= */
 const STORAGE_KEY = 'growthTrackerData';
 
+// Paste your Apps Script Web App URL here (ends in /exec) to skip manual
+// setup entirely — everyone who opens this page will connect automatically.
+// Leave blank to keep the one-time "paste your own URL" setup flow instead.
+const DEFAULT_SHEET_URL = 'https://script.google.com/macros/s/AKfycbwff_HW7ZQc97raOzYWduw4qwcSx8D3NwlevwFX5L-iWlzyXO394RMz0itXGdAPnDXx/exec';
+
 function loadState(){
   try{
     const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) : { dob:'', sex:'boy', sheetUrl:'', records: [] };
+    const parsed = raw ? JSON.parse(raw) : null;
+    if(parsed){
+      if(!parsed.sheetUrl && DEFAULT_SHEET_URL) parsed.sheetUrl = DEFAULT_SHEET_URL;
+      return parsed;
+    }
+    return { dob:'', sex:'boy', sheetUrl: DEFAULT_SHEET_URL || '', records: [] };
   }catch(err){
     console.warn('Could not load growth data:', err);
-    return { dob:'', sex:'boy', sheetUrl:'', records: [] };
+    return { dob:'', sex:'boy', sheetUrl: DEFAULT_SHEET_URL || '', records: [] };
   }
 }
 function saveState(state){
