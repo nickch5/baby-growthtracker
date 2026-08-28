@@ -82,6 +82,7 @@
   .btn:hover{ opacity:.85; }
   .btn-primary{ background: var(--sage-deep); color:#fff; }
   .btn-ghost{ background: transparent; color: var(--sage-deep); border: 1.5px dashed var(--sage); }
+  .btn-text{ background:none; border:none; color: var(--ink-soft); font-size:13px; cursor:pointer; padding:4px 6px; }
   .btn-row{ margin-top: 14px; display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
   .status{ font-size: 12.5px; color: var(--ink-soft); }
   .status.ok{ color: var(--sage-deep); }
@@ -101,11 +102,13 @@
   th, td{ text-align:left; padding: 8px 6px; border-bottom: 1px solid var(--line); }
   th{ font-size: 11px; letter-spacing:.05em; text-transform:uppercase; color: var(--ink-soft); font-weight:600; }
   td.num{ font-variant-numeric: tabular-nums; }
-  .del-btn{
-    border:none; background:transparent; color: var(--ink-soft); cursor:pointer; font-size:14px;
-    width:26px; height:26px; border-radius:50%;
+  .actions{ white-space:nowrap; }
+  .icon-btn{
+    border:none; background:transparent; color: var(--ink-soft); cursor:pointer; font-size:13px;
+    padding: 4px 6px; border-radius:6px;
   }
-  .del-btn:hover{ background: var(--rose); color:#fff; }
+  .icon-btn:hover{ background: var(--paper); color: var(--sage-deep); }
+  .icon-btn.danger:hover{ background: var(--rose); color:#fff; }
   .empty{ color: var(--ink-soft); font-size: 14px; padding: 6px 0; }
 
   .chart-wrap{ position:relative; height: 300px; }
@@ -232,6 +235,7 @@
     </div>
     <div class="btn-row">
       <button class="btn btn-primary" id="saveRecordBtn" type="button">Save measurement</button>
+      <button class="btn-text" id="cancelEditRecordBtn" type="button" style="display:none;">Cancel edit</button>
       <span class="status" id="saveStatus"></span>
     </div>
   </div>
@@ -377,7 +381,7 @@ const STORAGE_KEY = 'growthTrackerData';
 // Paste your Apps Script Web App URL here (ends in /exec) to skip manual
 // setup entirely — everyone who opens this page will connect automatically.
 // Leave blank to keep the one-time "paste your own URL" setup flow instead.
-const DEFAULT_SHEET_URL = 'https://script.google.com/macros/s/AKfycbwff_HW7ZQc97raOzYWduw4qwcSx8D3NwlevwFX5L-iWlzyXO394RMz0itXGdAPnDXx/exec';
+const DEFAULT_SHEET_URL = 'https://script.google.com/macros/s/AKfycbzRN-4qcfNJ8pUbJo_yz31HmgL119LdWLptAaBvIge8mUcnVlTDnABGF_QDCGmj65yg/exec';
 
 function loadState(){
   try{
@@ -442,6 +446,8 @@ const sheetUrlInput = document.getElementById('sheetUrl');
 const syncStatus = document.getElementById('syncStatus');
 const saveStatus = document.getElementById('saveStatus');
 const recordsBody = document.getElementById('recordsBody');
+const saveRecordBtn = document.getElementById('saveRecordBtn');
+const cancelEditRecordBtn = document.getElementById('cancelEditRecordBtn');
 const recordsTable = document.getElementById('recordsTable');
 const emptyMsg = document.getElementById('emptyMsg');
 const recordCount = document.getElementById('recordCount');
@@ -499,22 +505,39 @@ function currentSheetUrl(){
 sheetUrlInput.addEventListener('input', currentSheetUrl);
 sheetUrlInput.addEventListener('change', currentSheetUrl);
 
-function postToSheet(record){
+function syncToSheet(payload){
   const url = currentSheetUrl();
-  if(!url) return Promise.resolve(false);
-  const payload = {
-    dob: state.dob, sex: state.sex,
-    date: record.date, height: record.height ?? '', weight: record.weight ?? '',
-    head: record.head ?? '', chest: record.chest ?? ''
-  };
+  if(!url) return Promise.resolve(null);
   return fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
     body: JSON.stringify(payload)
-  }).then(res => true).catch(err => {
-    console.warn('Sheet sync failed:', err);
-    return false;
-  });
+  })
+    .then(res => res.json())
+    .then(data => Array.isArray(data) ? data : null)
+    .catch(err => {
+      console.warn('Sheet sync failed:', err);
+      return null;
+    });
+}
+
+// converts a raw server row (keyed by sheet header names) into our record shape
+function fromServerRow(row){
+  const num = v => (v === '' || v === undefined || v === null) ? null : parseFloat(v);
+  return {
+    rowIndex: row.rowIndex,
+    date: row['Date Measured'] || '',
+    height: num(row['Height (cm)']),
+    weight: num(row['Weight (kg)']),
+    head: num(row['Head Circumference (cm)']),
+    chest: num(row['Chest Circumference (cm)'])
+  };
+}
+
+function applyServerRecords(rows){
+  if(!Array.isArray(rows)) return;
+  state.records = rows.map(fromServerRow).sort((a,b) => new Date(a.date) - new Date(b.date));
+  saveState(state);
 }
 
 let lastSyncError = '';
@@ -546,32 +569,13 @@ function pullFromSheet(){
     });
 }
 
-// remote rows look like: [{ 'Recorded At', DOB, Sex, 'Date Measured',
+// remote rows look like: [{ rowIndex, 'Recorded At', DOB, Sex, 'Date Measured',
 //   'Height (cm)', 'Weight (kg)', 'Head Circumference (cm)', 'Chest Circumference (cm)' }, ...]
 function mergeRemoteRows(rows){
   if(!Array.isArray(rows) || !rows.length) return false;
-
   if(!state.dob && rows[0]['DOB']) state.dob = rows[0]['DOB'];
   if(rows[0]['Sex']) state.sex = (rows[0]['Sex'] === 'girl') ? 'girl' : 'boy';
-
-  const byDate = {};
-  state.records.forEach(r => { byDate[r.date] = r; });
-
-  rows.forEach(row => {
-    const date = row['Date Measured'];
-    if(!date) return;
-    const num = v => (v === '' || v === undefined || v === null) ? null : parseFloat(v);
-    byDate[date] = {
-      date,
-      height: num(row['Height (cm)']),
-      weight: num(row['Weight (kg)']),
-      head: num(row['Head Circumference (cm)']),
-      chest: num(row['Chest Circumference (cm)'])
-    };
-  });
-
-  state.records = Object.values(byDate).sort((a,b) => new Date(a.date) - new Date(b.date));
-  saveState(state);
+  applyServerRecords(rows);
   dobInput.value = state.dob || '';
   sexSelect.value = state.sex || 'boy';
   return true;
@@ -618,8 +622,34 @@ if(state.sheetUrl){
   syncPull(false);
 }
 
-/* ================= add / delete records ================= */
-document.getElementById('saveRecordBtn').addEventListener('click', () => {
+/* ================= add / edit / delete records ================= */
+let editingRowIndex = null; // rowIndex of the record being edited, or null when adding new
+
+function resetMeasurementForm(){
+  editingRowIndex = null;
+  document.getElementById('mDate').value = new Date().toISOString().slice(0,10);
+  ['mHeight','mWeight','mHead','mChest'].forEach(id => document.getElementById(id).value = '');
+  saveRecordBtn.textContent = 'Save measurement';
+  cancelEditRecordBtn.style.display = 'none';
+}
+
+function editRecord(rowIndex){
+  const r = state.records.find(x => x.rowIndex === rowIndex);
+  if(!r) return;
+  editingRowIndex = rowIndex;
+  document.getElementById('mDate').value = r.date || '';
+  document.getElementById('mHeight').value = r.height ?? '';
+  document.getElementById('mWeight').value = r.weight ?? '';
+  document.getElementById('mHead').value = r.head ?? '';
+  document.getElementById('mChest').value = r.chest ?? '';
+  saveRecordBtn.textContent = 'Update measurement';
+  cancelEditRecordBtn.style.display = 'inline-block';
+  saveRecordBtn.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+cancelEditRecordBtn.addEventListener('click', resetMeasurementForm);
+
+saveRecordBtn.addEventListener('click', () => {
   const date = document.getElementById('mDate').value;
   if(!date){ saveStatus.textContent = 'Please pick a date.'; saveStatus.className = 'status err'; return; }
   const record = {
@@ -632,28 +662,57 @@ document.getElementById('saveRecordBtn').addEventListener('click', () => {
   if(record.height === null && record.weight === null && record.head === null && record.chest === null){
     saveStatus.textContent = 'Enter at least one measurement.'; saveStatus.className = 'status err'; return;
   }
-  state.records.push(record);
+
+  const isEdit = editingRowIndex !== null;
+
+  if(isEdit){
+    const idx = state.records.findIndex(r => r.rowIndex === editingRowIndex);
+    if(idx !== -1) state.records[idx] = { ...record, rowIndex: editingRowIndex };
+  } else {
+    state.records.push(record);
+  }
   state.records.sort((a,b) => new Date(a.date) - new Date(b.date));
   saveState(state);
-
-  ['mHeight','mWeight','mHead','mChest'].forEach(id => document.getElementById(id).value = '');
   saveStatus.textContent = 'Saved.'; saveStatus.className = 'status ok';
+  renderAll();
 
-  postToSheet(record).then(ok => {
-    if(state.sheetUrl){
-      saveStatus.textContent = ok ? 'Saved & synced to Google Sheets.' : 'Saved locally — sheet sync failed.';
-      saveStatus.className = ok ? 'status ok' : 'status err';
-      if(!ok) showWarning('Saved locally, but could not reach Google Sheets. Check your Web App URL.');
+  const payload = isEdit
+    ? { action: 'update', rowIndex: editingRowIndex, dob: state.dob, sex: state.sex, ...record }
+    : { action: 'add', dob: state.dob, sex: state.sex, ...record };
+
+  resetMeasurementForm();
+
+  syncToSheet(payload).then(rows => {
+    if(!state.sheetUrl) return;
+    if(rows){
+      applyServerRecords(rows);
+      renderAll();
+      saveStatus.textContent = 'Saved & synced to Google Sheets.'; saveStatus.className = 'status ok';
+    } else {
+      saveStatus.textContent = 'Saved locally — sheet sync failed.'; saveStatus.className = 'status err';
+      showWarning('Saved locally, but could not reach Google Sheets. Check your Web App URL.');
     }
   });
-
-  renderAll();
 });
 
-function deleteRecord(idx){
-  state.records.splice(idx, 1);
-  saveState(state);
-  renderAll();
+function deleteRecord(rowIndexOrIdx, isLocalIdx){
+  if(isLocalIdx){
+    state.records.splice(rowIndexOrIdx, 1);
+    saveState(state);
+    renderAll();
+    return;
+  }
+  if(!confirm('Delete this measurement?')) return;
+  syncToSheet({ action: 'delete', rowIndex: rowIndexOrIdx }).then(rows => {
+    if(rows){
+      applyServerRecords(rows);
+    } else {
+      state.records = state.records.filter(r => r.rowIndex !== rowIndexOrIdx);
+      saveState(state);
+      showWarning('Deleted locally, but could not reach Google Sheets.');
+    }
+    renderAll();
+  });
 }
 
 /* ================= rendering ================= */
@@ -668,6 +727,8 @@ function renderTable(){
   recordsTable.style.display = 'table';
   recordsBody.innerHTML = state.records.map((r, i) => {
     const age = formatAge(ageInMonths(state.dob, r.date));
+    const key = (r.rowIndex !== undefined && r.rowIndex !== null) ? r.rowIndex : i;
+    const isSynced = r.rowIndex !== undefined && r.rowIndex !== null;
     return `<tr>
       <td>${r.date}</td>
       <td>${age}</td>
@@ -675,11 +736,39 @@ function renderTable(){
       <td class="num">${r.weight ?? '—'}${r.weight ? ' kg' : ''}</td>
       <td class="num">${r.head ?? '—'}${r.head ? ' cm' : ''}</td>
       <td class="num">${r.chest ?? '—'}${r.chest ? ' cm' : ''}</td>
-      <td><button class="del-btn" data-idx="${i}" title="Delete">✕</button></td>
+      <td class="actions">
+        <button class="icon-btn" data-edit="${key}" data-local="${!isSynced}" title="Edit">Edit</button>
+        <button class="icon-btn danger" data-del="${key}" data-local="${!isSynced}" title="Delete">✕</button>
+      </td>
     </tr>`;
   }).join('');
-  recordsBody.querySelectorAll('.del-btn').forEach(btn => {
-    btn.addEventListener('click', () => deleteRecord(+btn.dataset.idx));
+  recordsBody.querySelectorAll('[data-edit]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const isLocal = btn.dataset.local === 'true';
+      const key = isLocal ? +btn.dataset.edit : +btn.dataset.edit;
+      if(isLocal){
+        const r = state.records[key];
+        if(!r) return;
+        document.getElementById('mDate').value = r.date || '';
+        document.getElementById('mHeight').value = r.height ?? '';
+        document.getElementById('mWeight').value = r.weight ?? '';
+        document.getElementById('mHead').value = r.head ?? '';
+        document.getElementById('mChest').value = r.chest ?? '';
+        editingRowIndex = null; // local-only unsynced record — plain overwrite on save
+        saveRecordBtn.textContent = 'Update measurement';
+        cancelEditRecordBtn.style.display = 'inline-block';
+        saveRecordBtn.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      } else {
+        editRecord(key);
+      }
+    });
+  });
+  recordsBody.querySelectorAll('[data-del]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const isLocal = btn.dataset.local === 'true';
+      const key = +btn.dataset.del;
+      deleteRecord(key, isLocal);
+    });
   });
 }
 
