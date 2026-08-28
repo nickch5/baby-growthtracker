@@ -633,10 +633,10 @@ function resetMeasurementForm(){
   cancelEditRecordBtn.style.display = 'none';
 }
 
-function editRecord(rowIndex){
-  const r = state.records.find(x => x.rowIndex === rowIndex);
+function editRecordByDate(date){
+  const r = state.records.find(x => x.date === date);
   if(!r) return;
-  editingRowIndex = rowIndex;
+  editingRowIndex = (r.rowIndex !== undefined && r.rowIndex !== null) ? r.rowIndex : null;
   document.getElementById('mDate').value = r.date || '';
   document.getElementById('mHeight').value = r.height ?? '';
   document.getElementById('mWeight').value = r.weight ?? '';
@@ -665,16 +665,20 @@ saveRecordBtn.addEventListener('click', () => {
 
   const isEdit = editingRowIndex !== null;
 
-  if(isEdit){
-    const idx = state.records.findIndex(r => r.rowIndex === editingRowIndex);
-    if(idx !== -1) state.records[idx] = { ...record, rowIndex: editingRowIndex };
-  } else {
-    state.records.push(record);
-  }
-  state.records.sort((a,b) => new Date(a.date) - new Date(b.date));
-  saveState(state);
-  saveStatus.textContent = 'Saved.'; saveStatus.className = 'status ok';
-  renderAll();
+  const finishLocal = () => {
+    if(isEdit){
+      const idx = state.records.findIndex(r => r.rowIndex === editingRowIndex);
+      if(idx !== -1) state.records[idx] = { ...record, rowIndex: editingRowIndex };
+    } else {
+      state.records.push(record);
+    }
+    state.records.sort((a,b) => new Date(a.date) - new Date(b.date));
+    saveState(state);
+    saveStatus.textContent = 'Saved.'; saveStatus.className = 'status ok';
+    renderAll();
+  };
+
+  finishLocal();
 
   const payload = isEdit
     ? { action: 'update', rowIndex: editingRowIndex, dob: state.dob, sex: state.sex, ...record }
@@ -682,8 +686,9 @@ saveRecordBtn.addEventListener('click', () => {
 
   resetMeasurementForm();
 
+  if(!state.sheetUrl) return;
+
   syncToSheet(payload).then(rows => {
-    if(!state.sheetUrl) return;
     if(rows){
       applyServerRecords(rows);
       renderAll();
@@ -695,24 +700,50 @@ saveRecordBtn.addEventListener('click', () => {
   });
 });
 
-function deleteRecord(rowIndexOrIdx, isLocalIdx){
-  if(isLocalIdx){
-    state.records.splice(rowIndexOrIdx, 1);
+function deleteRecordByDate(date){
+  if(!confirm('Delete this measurement?')) return;
+
+  const removeLocallyOnly = () => {
+    state.records = state.records.filter(x => x.date !== date);
     saveState(state);
     renderAll();
+  };
+
+  if(!state.sheetUrl){
+    removeLocallyOnly();
     return;
   }
-  if(!confirm('Delete this measurement?')) return;
-  syncToSheet({ action: 'delete', rowIndex: rowIndexOrIdx }).then(rows => {
-    if(rows){
-      applyServerRecords(rows);
-    } else {
-      state.records = state.records.filter(r => r.rowIndex !== rowIndexOrIdx);
-      saveState(state);
-      showWarning('Deleted locally, but could not reach Google Sheets.');
-    }
-    renderAll();
-  });
+
+  const r = state.records.find(x => x.date === date);
+  const hasRowIndex = r && r.rowIndex !== undefined && r.rowIndex !== null;
+
+  const doServerDelete = (rowIndex) => {
+    syncToSheet({ action: 'delete', rowIndex }).then(rows => {
+      if(rows){
+        applyServerRecords(rows);
+      } else {
+        removeLocallyOnly();
+        showWarning('Deleted locally, but could not reach Google Sheets.');
+      }
+      renderAll();
+    });
+  };
+
+  if(hasRowIndex){
+    doServerDelete(r.rowIndex);
+  } else {
+    // stale/local record with no known sheet row — refresh first so we
+    // delete the correct row instead of silently only removing locally
+    syncPull(false).then(() => {
+      const fresh = state.records.find(x => x.date === date);
+      if(fresh && fresh.rowIndex !== undefined && fresh.rowIndex !== null){
+        doServerDelete(fresh.rowIndex);
+      } else {
+        // still not found on the sheet — it was only ever local
+        removeLocallyOnly();
+      }
+    });
+  }
 }
 
 /* ================= rendering ================= */
@@ -725,10 +756,8 @@ function renderTable(){
   }
   emptyMsg.style.display = 'none';
   recordsTable.style.display = 'table';
-  recordsBody.innerHTML = state.records.map((r, i) => {
+  recordsBody.innerHTML = state.records.map((r) => {
     const age = formatAge(ageInMonths(state.dob, r.date));
-    const key = (r.rowIndex !== undefined && r.rowIndex !== null) ? r.rowIndex : i;
-    const isSynced = r.rowIndex !== undefined && r.rowIndex !== null;
     return `<tr>
       <td>${r.date}</td>
       <td>${age}</td>
@@ -737,38 +766,16 @@ function renderTable(){
       <td class="num">${r.head ?? '—'}${r.head ? ' cm' : ''}</td>
       <td class="num">${r.chest ?? '—'}${r.chest ? ' cm' : ''}</td>
       <td class="actions">
-        <button class="icon-btn" data-edit="${key}" data-local="${!isSynced}" title="Edit">Edit</button>
-        <button class="icon-btn danger" data-del="${key}" data-local="${!isSynced}" title="Delete">✕</button>
+        <button class="icon-btn" data-edit="${r.date}" title="Edit">Edit</button>
+        <button class="icon-btn danger" data-del="${r.date}" title="Delete">Delete</button>
       </td>
     </tr>`;
   }).join('');
   recordsBody.querySelectorAll('[data-edit]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const isLocal = btn.dataset.local === 'true';
-      const key = isLocal ? +btn.dataset.edit : +btn.dataset.edit;
-      if(isLocal){
-        const r = state.records[key];
-        if(!r) return;
-        document.getElementById('mDate').value = r.date || '';
-        document.getElementById('mHeight').value = r.height ?? '';
-        document.getElementById('mWeight').value = r.weight ?? '';
-        document.getElementById('mHead').value = r.head ?? '';
-        document.getElementById('mChest').value = r.chest ?? '';
-        editingRowIndex = null; // local-only unsynced record — plain overwrite on save
-        saveRecordBtn.textContent = 'Update measurement';
-        cancelEditRecordBtn.style.display = 'inline-block';
-        saveRecordBtn.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      } else {
-        editRecord(key);
-      }
-    });
+    btn.addEventListener('click', () => editRecordByDate(btn.dataset.edit));
   });
   recordsBody.querySelectorAll('[data-del]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const isLocal = btn.dataset.local === 'true';
-      const key = +btn.dataset.del;
-      deleteRecord(key, isLocal);
-    });
+    btn.addEventListener('click', () => deleteRecordByDate(btn.dataset.del));
   });
 }
 
