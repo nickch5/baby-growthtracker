@@ -633,8 +633,8 @@ function resetMeasurementForm(){
   cancelEditRecordBtn.style.display = 'none';
 }
 
-function editRecordByDate(date){
-  const r = state.records.find(x => x.date === date);
+function editRecordAt(idx){
+  const r = state.records[idx];
   if(!r) return;
   editingRowIndex = (r.rowIndex !== undefined && r.rowIndex !== null) ? r.rowIndex : null;
   document.getElementById('mDate').value = r.date || '';
@@ -700,50 +700,31 @@ saveRecordBtn.addEventListener('click', () => {
   });
 });
 
-function deleteRecordByDate(date){
+function deleteRecordAt(idx){
+  const target = state.records[idx];
+  if(!target) return;
   if(!confirm('Delete this measurement?')) return;
 
-  const removeLocallyOnly = () => {
-    state.records = state.records.filter(x => x.date !== date);
+  if(!state.sheetUrl || target.rowIndex === undefined || target.rowIndex === null){
+    // not connected, or this record was never confirmed synced — just remove locally
+    state.records.splice(idx, 1);
     saveState(state);
     renderAll();
-  };
-
-  if(!state.sheetUrl){
-    removeLocallyOnly();
     return;
   }
 
-  const r = state.records.find(x => x.date === date);
-  const hasRowIndex = r && r.rowIndex !== undefined && r.rowIndex !== null;
-
-  const doServerDelete = (rowIndex) => {
-    syncToSheet({ action: 'delete', rowIndex }).then(rows => {
-      if(rows){
-        applyServerRecords(rows);
-      } else {
-        removeLocallyOnly();
-        showWarning('Deleted locally, but could not reach Google Sheets.');
-      }
-      renderAll();
-    });
-  };
-
-  if(hasRowIndex){
-    doServerDelete(r.rowIndex);
-  } else {
-    // stale/local record with no known sheet row — refresh first so we
-    // delete the correct row instead of silently only removing locally
-    syncPull(false).then(() => {
-      const fresh = state.records.find(x => x.date === date);
-      if(fresh && fresh.rowIndex !== undefined && fresh.rowIndex !== null){
-        doServerDelete(fresh.rowIndex);
-      } else {
-        // still not found on the sheet — it was only ever local
-        removeLocallyOnly();
-      }
-    });
-  }
+  // rowIndex uniquely identifies the exact sheet row, so this is safe
+  // even when multiple records share the same date
+  syncToSheet({ action: 'delete', rowIndex: target.rowIndex }).then(rows => {
+    if(rows){
+      applyServerRecords(rows);
+    } else {
+      state.records.splice(idx, 1);
+      saveState(state);
+      showWarning('Deleted locally, but could not reach Google Sheets.');
+    }
+    renderAll();
+  });
 }
 
 /* ================= rendering ================= */
@@ -756,7 +737,7 @@ function renderTable(){
   }
   emptyMsg.style.display = 'none';
   recordsTable.style.display = 'table';
-  recordsBody.innerHTML = state.records.map((r) => {
+  recordsBody.innerHTML = state.records.map((r, i) => {
     const age = formatAge(ageInMonths(state.dob, r.date));
     return `<tr>
       <td>${r.date}</td>
@@ -766,16 +747,16 @@ function renderTable(){
       <td class="num">${r.head ?? '—'}${r.head ? ' cm' : ''}</td>
       <td class="num">${r.chest ?? '—'}${r.chest ? ' cm' : ''}</td>
       <td class="actions">
-        <button class="icon-btn" data-edit="${r.date}" title="Edit">Edit</button>
-        <button class="icon-btn danger" data-del="${r.date}" title="Delete">Delete</button>
+        <button class="icon-btn" data-idx="${i}" data-act="edit" title="Edit">Edit</button>
+        <button class="icon-btn danger" data-idx="${i}" data-act="del" title="Delete">Delete</button>
       </td>
     </tr>`;
   }).join('');
-  recordsBody.querySelectorAll('[data-edit]').forEach(btn => {
-    btn.addEventListener('click', () => editRecordByDate(btn.dataset.edit));
+  recordsBody.querySelectorAll('[data-act="edit"]').forEach(btn => {
+    btn.addEventListener('click', () => editRecordAt(+btn.dataset.idx));
   });
-  recordsBody.querySelectorAll('[data-del]').forEach(btn => {
-    btn.addEventListener('click', () => deleteRecordByDate(btn.dataset.del));
+  recordsBody.querySelectorAll('[data-act="del"]').forEach(btn => {
+    btn.addEventListener('click', () => deleteRecordAt(+btn.dataset.idx));
   });
 }
 
